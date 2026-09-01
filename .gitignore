@@ -98,5 +98,15 @@ logs/
 local.properties
 app/build/
 
+# HarmonyOS
+entry/build/
+entry/.cxx/
+entry/hvigor/
+entry/.cxx-default/
+
 # APK
 *.apk
+
+# HPK
+*.hpk
+*.app

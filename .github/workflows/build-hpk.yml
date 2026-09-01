@@ -1,0 +1,82 @@
+name: Build & Release HPK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "发布版本名称（留空则自动用构建时间 YYYYMMDDHHMM）"
+        required: false
+        default: ""
+      commit:
+        description: "构建所用的 commit hash（留空则使用触发时的 HEAD）"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build-hpk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event.inputs.commit != '' && github.event.inputs.commit || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install hvigorw
+        run: |
+          npm install -g @ohos/hvigorw
+
+      - name: Determine app version
+        id: ver
+        env:
+          TZ: Asia/Shanghai
+        run: |
+          VER="${{ github.event.inputs.version_name }}"
+          [ -z "$VER" ] && VER=$(date +%Y%m%d%H%M)
+          echo "app_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "app_version_code=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Update HarmonyOS project version
+        run: |
+          # Update bundleName and version info in entry/build-profile.json5
+          cd entry
+          sed -i 's/"versionCode": [0-9]*/"versionCode": ${{ steps.ver.outputs.app_version_code }}/g' build-profile.json5
+          sed -i 's/"versionName": "[^"]*"/"versionName": "${{ steps.ver.outputs.app_version }}"/g' build-profile.json5
+
+      - name: Build HPK
+        run: |
+          # Use hvigor to build the HarmonyOS project
+          cd entry
+          hvigorw assembleHap --mode module
+
+      - name: Upload HPK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DouDiZhu-harmonyos
+          path: entry/build/default/outputs/**/*.hpk
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TZ: Asia/Shanghai
+        run: |
+          TAG="harmonyos-${{ steps.ver.outputs.app_version }}-${{ github.run_number }}"
+          HPK_FILE=$(find entry/build/default/outputs -name "*.hpk" | head -1)
+          if [ -z "$HPK_FILE" ]; then
+            echo "No HPK file found!"
+            exit 1
+          fi
+          gh release create "${TAG}" "${HPK_FILE}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "DouDiZhu HarmonyOS ${{ steps.ver.outputs.app_version }}" \
+            --notes "commit: $(git rev-parse HEAD | cut -c1-7) | 版本：${{ steps.ver.outputs.app_version }} (HarmonyOS)"
