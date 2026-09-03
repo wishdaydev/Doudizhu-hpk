@@ -1,0 +1,12 @@
+{
+  "name": "doudizhu",
+  "version": "1.0.0",
+  "description": "Doudizhu HarmonyOS Project",
+  "main": "",
+  "author": "",
+  "license": "GPL-3.0",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hypium": "1.0.6"
+  }
+}
